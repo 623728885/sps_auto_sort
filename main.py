@@ -2,7 +2,6 @@ import pandas as pd
 import numpy as np
 import os
 
-
 s_column_name = {
     'sign': 1,
     'shot_line': 10,
@@ -153,15 +152,18 @@ def create_shot_file(shot_coordinate_file):
     # 读坐标
     shot_coordinate_excel = pd.read_csv(shot_coordinate_file, header=None)
     _shot_file = pd.DataFrame(columns=s_column_name.keys())
-    _shot_file['shot_line'] = shot_coordinate_excel[0].str.split('-', expand=True)[1]
-    _shot_file['shot_line'][_shot_file['shot_line'].str.len() > 3] = \
-        _shot_file['shot_line'].str.split('.', expand=True)[0] + ['2.'] * _shot_file.shape[0] + \
-        _shot_file['shot_line'].str.split('.', expand=True)[1]
-    _shot_file['shot_line'][_shot_file['shot_line'].str.len() <= 3] = \
-        _shot_file['shot_line'] + ['2'] * _shot_file.shape[0]
-    _shot_file['shot_point'] = shot_coordinate_excel[0].str.split('-', expand=True)[2]
-    _shot_file['X'] = shot_coordinate_excel[1]
-    _shot_file['Y'] = shot_coordinate_excel[2]
+    _shot_file['shot_line'] = shot_coordinate_excel[0].str.split('-', expand=True)[0]
+    if (_shot_file['shot_line'].str.len() > 10).any():
+        _shot_file['shot_line'][_shot_file['shot_line'].str.len() > 3] = \
+            _shot_file['shot_line'].str.split('.', expand=True)[0] + ['2.'] * _shot_file.shape[0] + \
+            _shot_file['shot_line'].str.split('.', expand=True)[1]
+        _shot_file['shot_line'][_shot_file['shot_line'].str.len() <= 3] = \
+            _shot_file['shot_line'] + ['2'] * _shot_file.shape[0]
+    else:
+        _shot_file['shot_line'] = _shot_file['shot_line'] + ['2'] * _shot_file.shape[0]
+    _shot_file['shot_point'] = shot_coordinate_excel[0].str.split('-', expand=True)[1]
+    _shot_file['X'] = shot_coordinate_excel[2].round(1)
+    _shot_file['Y'] = shot_coordinate_excel[1].round(1)
     # 默认赋值
     _shot_file['sign'] = 'S'
     _shot_file['index'] = 1
@@ -174,11 +176,11 @@ def create_receiver_file(receiver_coordinate_file):
     # 读坐标
     rec_coordinate_excel = pd.read_csv(receiver_coordinate_file, header=None)
     _rec_file = pd.DataFrame(columns=r_column_name.keys())
-    _rec_file['rec_line'] = rec_coordinate_excel[0].str.split('-', expand=True)[1] + \
-                            rec_coordinate_excel[0].str.split('-', expand=True)[2]
-    _rec_file['rec_point'] = rec_coordinate_excel[0].str.split('-', expand=True)[3]
-    _rec_file['X'] = rec_coordinate_excel[2]
-    _rec_file['Y'] = rec_coordinate_excel[1]
+    _rec_file['rec_line'] = rec_coordinate_excel[0].str.split('-', expand=True)[0] + \
+                            rec_coordinate_excel[0].str.split('-', expand=True)[1]
+    _rec_file['rec_point'] = rec_coordinate_excel[0].str.split('-', expand=True)[2]
+    _rec_file['X'] = rec_coordinate_excel[2].round(1)
+    _rec_file['Y'] = rec_coordinate_excel[1].round(1)
     # 默认赋值
     _rec_file['sign'] = 'R'
     _rec_file['index'] = 1
@@ -189,23 +191,29 @@ def create_receiver_file(receiver_coordinate_file):
 
 def create_relation_file(_shot_file, channel_increment=480, line_num=1):
     # 计算起始通道号
-    channel_start = np.arange(1, channel_increment * line_num, channel_increment)
+    # channel_start = np.arange(1, channel_increment * line_num, channel_increment)
+    channel_start = [1, 541, 1621]
     # 计算终止通道号
-    channel_end = np.arange(channel_increment, channel_increment * (line_num + 1), channel_increment)
+    # channel_end = np.arange(channel_increment, channel_increment * (line_num + 1), channel_increment)
+    channel_end = [540, 1620, 2160]
     _relation_file = pd.DataFrame(columns=x_column_name.keys())
     _relation_file['shot_line'] = np.repeat(_shot_file['shot_line'].values, line_num, axis=0)
+    _relation_file['shot_line'] = _relation_file['shot_line'].astype('str')
     _relation_file['shot_point'] = np.repeat(_shot_file['shot_point'].values, line_num, axis=0)
-    _relation_file['receiver_line'][_relation_file['shot_line'].str.len() > 4] = \
-        _relation_file['shot_line'].str.split('.', expand=True)[0].str.split(3, expand=True)[0] + ['1', '2', '3'] * \
-        _shot_file.shape[0] + '.' + _relation_file['shot_line'].str.split('.', expand=True)[1]
-    _relation_file['receiver_line'][_relation_file['shot_line'].str.len() <= 4] = \
-        _relation_file['shot_line'].str.split(3, expand=True)[0] + ['1', '2', '3'] * _shot_file.shape[0]
+    _relation_file['shot_point'] = _relation_file['shot_point'].astype('str')
+    if (_relation_file['shot_line'].str.len() > 10).any():
+        _relation_file['receiver_line'][_relation_file['shot_line'].str.len() > 4] = \
+            _relation_file['shot_line'].str.split('.', expand=True)[0].str.slice(0, -1) + ['1', '2', '3'] * \
+            _shot_file.shape[0] + '.' + _relation_file['shot_line'].str.split('.', expand=True)[1]
+        _relation_file['receiver_line'][_relation_file['shot_line'].str.len() <= 4] = \
+            _relation_file['shot_line'].str.split(3, expand=True)[0] + ['1', '2', '3'] * _shot_file.shape[0]
+    else:
+        _relation_file['receiver_line'] = _relation_file['shot_line'].str.slice(0, -1) + ['1', '2', '3'] * \
+                                          _shot_file.shape[0]
     _relation_file['start_channel'] = list(channel_start) * _shot_file.shape[0]
     _relation_file['end_channel'] = list(channel_end) * _shot_file.shape[0]
-    _relation_file['start_receiver_point'] = _relation_file['shot_point'].astype(float) - channel_increment / 2 + 1
-    _relation_file['start_receiver_point'] = _relation_file['start_receiver_point'].astype(int)
-    _relation_file['end_receiver_point'] = _relation_file['shot_point'].astype(float) + channel_increment / 2
-    _relation_file['end_receiver_point'] = _relation_file['end_receiver_point'].astype(int)
+    _relation_file['start_receiver_point'] = _relation_file['shot_point'].astype(float).astype(int) - channel_increment / 2 + 1
+    _relation_file['end_receiver_point'] = _relation_file['shot_point'].astype(float).astype(int) + channel_increment / 2
     # 默认赋值
     _relation_file['sign'] = 'X'
     _relation_file['tape_num'] = 1
@@ -224,8 +232,10 @@ def sort_line_nbr():
 
 
 file_path = '../../OneDrive - stu.cdut.edu.cn/南江北投标/宁强、南江北炮检点坐标/'
-shot_file_name = '宁强炮点.csv'
-rec_file_name = '宁强检波点.csv'
+shot_file_name = '南江炮线非攻关.csv'
+# shot_file_name = '宁强炮点.csv'
+rec_file_name = '南江检波线非攻关.csv'
+# rec_file_name = '宁强检波点.csv'
 
 shot_file = create_shot_file(file_path + shot_file_name)
 rec_file = create_receiver_file(file_path + rec_file_name)
@@ -234,9 +244,10 @@ rec_file = create_receiver_file(file_path + rec_file_name)
 relation_file = create_relation_file(shot_file, channel_increment=480, line_num=3)
 
 if __name__ == '__main__':
-    sps_out(shot_file, './nq.S')
-    sps_out(rec_file, './nq.R')
-    sps_out(relation_file, './nq.X')
-    (s, s_head), (x, x_head) = sps_read('sx', './s.S', './r.R', './x.X')
+    file_out_name = '南江北'
+    sps_out(shot_file, './{}.S'.format(file_out_name))
+    sps_out(rec_file, './{}.R'.format(file_out_name))
+    sps_out(relation_file, './{}.X'.format(file_out_name))
+    # (s, s_head), (x, x_head) = sps_read('sx', './s.S', './r.R', './x.X')
     # sps_out(s, './nq.S')
     # 测试更新
